@@ -33,7 +33,7 @@ using namespace std;
 // Pooling methods
 enum {
 	POOL_STOCHASTIC, POOL_MEAN, POOL_MAX
-} POOL_METHOD;
+};
 
 #define ATD at<double>
 #define elif else if
@@ -139,7 +139,7 @@ ReverseInt (int i){
 
 void 
 read_Mnist(string filename, vector<Mat> &vec){
-    ifstream file(filename, ios::binary);
+    ifstream file(filename.c_str(), ios::binary);
 	cout << filename << endl;
     if (file.is_open()){
 		cout << "opened" << endl;
@@ -172,7 +172,7 @@ read_Mnist(string filename, vector<Mat> &vec){
 void 
 read_Mnist_Label(string filename, Mat &mat)
 {
-    ifstream file(filename, ios::binary);
+    ifstream file(filename.c_str(), ios::binary);
     if (file.is_open()){
         int magic_number = 0;
         int number_of_images = 0;
