@@ -1,4 +1,4 @@
-// ConvNet.cpp
+﻿// ConvNet.cpp
 //
 // Author: Eric Yuan
 // Blog: http://eric-yuan.me
@@ -20,6 +20,7 @@
 #include <math.h>
 #include <fstream>
 #include <iostream>
+#include <time.h>
 
 using namespace cv;
 using namespace std;
@@ -30,9 +31,9 @@ using namespace std;
 #define CONV_SAME 1
 #define CONV_VALID 2
 // Pooling methods
-#define POOL_MAX 0
-#define POOL_MEAN 1
-#define POOL_MAX 2
+enum {
+	POOL_STOCHASTIC, POOL_MEAN, POOL_MAX
+} POOL_METHOD;
 
 #define ATD at<double>
 #define elif else if
@@ -139,7 +140,9 @@ ReverseInt (int i){
 void 
 read_Mnist(string filename, vector<Mat> &vec){
     ifstream file(filename, ios::binary);
+	cout << filename << endl;
     if (file.is_open()){
+		cout << "opened" << endl;
         int magic_number = 0;
         int number_of_images = 0;
         int n_rows = 0;
@@ -300,11 +303,17 @@ Pooling(Mat &M, int pVert, int pHori, int poolingMethod, vector<Point> &locat, b
     int remX = M.cols % pHori;
     int remY = M.rows % pVert;
     Mat newM;
+
+	// 池化要求M的宽高正好是倍数
+	// http://deeplearning.stanford.edu/wiki/index.php/%E6%B1%A0%E5%8C%96
     if(remX == 0 && remY == 0) M.copyTo(newM);
     else{
+		// 将左上方部分裁剪
         Rect roi = Rect(remX, remY, M.cols - remX, M.rows - remY);
         M(roi).copyTo(newM);
     }
+
+	// 方块的数目
     Mat res = Mat::zeros(newM.rows / pVert, newM.cols / pHori, CV_64FC1);
     for(int i=0; i<res.rows; i++){
         for(int j=0; j<res.cols; j++){
@@ -490,6 +499,7 @@ getNetworkCost(vector<Mat> &x, Mat &y, Cvl &cvl, vector<Ntw> &hLayers, SMR &smr,
             //tmpconv = sigmoid(tmpconv);
             tmpconv = ReLU(tmpconv);
             tpConv1st.push_back(tmpconv);
+			// 池化后的结果，宽高会缩小PoolingDim倍
             tmpconv = Pooling(tmpconv, PoolingDim, PoolingDim, Pooling_Methed, PLperKernel, false);
             PLperSample.push_back(PLperKernel);
             tpPool1st.push_back(tmpconv);
@@ -498,12 +508,16 @@ getNetworkCost(vector<Mat> &x, Mat &y, Cvl &cvl, vector<Ntw> &hLayers, SMR &smr,
         Conv1st.push_back(tpConv1st);
         Pool1st.push_back(tpPool1st);
     }
+	// Pool1st内存放的是 每个不同的sample，在不同的kernel下池化的结果
+	// 每一列代表一个sample，8个不同kernel得到的池化结果竖向排列
     Mat convolvedX = concatenateMat(Pool1st);
 
     // full connected layers
     vector<Mat> acti;
     acti.push_back(convolvedX);
+	// 可以得到NumHiddenLayers张图像
     for(int i=1; i<=NumHiddenLayers; i++){
+		// hLayers[i].b的高度和W应该一样，宽度为1
         Mat tmpacti = hLayers[i - 1].W * acti[i - 1] + repeat(hLayers[i - 1].b, 1, convolvedX.cols);
         acti.push_back(sigmoid(tmpacti));
     }
@@ -643,12 +657,14 @@ trainNetwork(vector<Mat> &x, Mat &y, Cvl &cvl, vector<Ntw> &HiddenLayers, SMR &s
             Rect roi = Rect(randomNum, 0, batch, y.rows);
             Mat batchY = y(roi);
 
+			// 这里计算误差并求得各个参数的偏导数
             getNetworkCost(batchX, batchY, cvl, HiddenLayers, smr, lambda);
 
             cout<<"learning step: "<<converge<<", Cost function value = "<<smr.cost<<", randomNum = "<<randomNum<<endl;
             if(fabs((smr.cost - lastcost) / smr.cost) <= 1e-7 && converge > 0) break;
             if(smr.cost <= 0) break;
             lastcost = smr.cost;
+			// 梯度下降，用上面求得的grad
             smr.Weight -= lrate * smr.Wgrad;
             smr.b -= lrate * smr.bgrad;
             for(int i=0; i<HiddenLayers.size(); i++){
@@ -767,8 +783,9 @@ main(int argc, char** argv)
     vector<Mat> trainX;
     vector<Mat> testX;
     Mat trainY, testY;
-    readData(trainX, trainY, "mnist/train-images-idx3-ubyte", "mnist/train-labels-idx1-ubyte", 60000);
-    readData(testX, testY, "mnist/t10k-images-idx3-ubyte", "mnist/t10k-labels-idx1-ubyte", 10000);
+	cout << "aaa" << trainX.size() << endl;
+    readData(trainX, trainY, "mnist/train-images.idx3-ubyte", "mnist/train-labels.idx1-ubyte", 60000);
+    readData(testX, testY, "mnist/t10k-images.idx3-ubyte", "mnist/t10k-labels.idx1-ubyte", 10000);
 
     cout<<"Read trainX successfully, including "<<trainX[0].cols * trainX[0].rows<<" features and "<<trainX.size()<<" samples."<<endl;
     cout<<"Read trainY successfully, including "<<trainY.cols<<" samples"<<endl;
